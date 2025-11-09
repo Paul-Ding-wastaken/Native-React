@@ -14,7 +14,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { UserContextProvider } from './userContextProvider';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
+import AntDesign from '@expo/vector-icons/AntDesign';
 import Info from './info';
+import Feather from '@expo/vector-icons/Feather';
 
 export default function testPage() {
     //Extra System Comps
@@ -342,7 +344,7 @@ export default function testPage() {
                                     style={[styles.secondaryCenteredButtonAnimation, secondaryButtonOnStart("x", 1, 1)]}>
                                     <Pressable disabled={!enableSecondaryButton || !isLoggedIn} style={[styles.secondaryCenterdButtons, { opacity: isLoggedIn ? 1 : 0.5 }]} onPress={() => onAPIPress()}>
                                         <View style={[{ justifyContent: 'center', alignItems: 'center' }]}>
-                                            <IconSymbol size={48} name="wrench" color="white" />
+                                            <AntDesign name="api" size={36} color="white" />
                                         </View>
                                     </Pressable>
                                 </Animated.View>
@@ -356,14 +358,14 @@ export default function testPage() {
                                 <Animated.View style={[styles.secondaryCenteredButtonAnimation, secondaryButtonOnStart("x", -1, 3)]}>
                                     <Pressable disabled={!enableSecondaryButton} style={styles.secondaryCenterdButtons} onPress={() => onButton3Press()}>
                                         <View style={[{ justifyContent: 'center', alignItems: 'center' }]}>
-                                            <IconSymbol size={48} name="car" color="white" />
+                                            <AntDesign name="book" size={36} color="white" />
                                         </View>
                                     </Pressable>
                                 </Animated.View>
                                 <Animated.View style={[styles.secondaryCenteredButtonAnimation, secondaryButtonOnStart("y", -1, 4)]}>
                                     <Pressable disabled={!enableSecondaryButton || !isLoggedIn} style={[styles.secondaryCenterdButtons, { opacity: isLoggedIn ? 1 : 0.5 }]} onPress={() => onButton4Press()}>
                                         <View style={[{ justifyContent: 'center', alignItems: 'center' }]}>
-                                            <Entypo size={48} name="arrow-bold-up" color="white" />
+                                            <Feather name="map" size={36} color="white" />
                                         </View>
                                     </Pressable>
                                 </Animated.View>
