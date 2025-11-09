@@ -1,16 +1,20 @@
 import 'react-native-reanimated';
-import { Image } from 'expo-image';
 import { Text, View, Platform, Pressable, StyleSheet, ScrollView } from 'react-native';
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import Animated, { SharedValue, useSharedValue, useAnimatedStyle, withTiming, Easing, withDelay } from 'react-native-reanimated';
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useContext } from 'react';
 import MainBackground from '@/components/main-background';
 import Settings from './settings';
+import UserContext from './user';
+import API from './api';
+import Entypo from '@expo/vector-icons/Entypo';
+import Map from './map';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { UserContextProvider } from './userContextProvider';
+import * as Location from 'expo-location';
+import * as Notifications from 'expo-notifications';
+import Info from './info';
 
 export default function testPage() {
     //Extra System Comps
@@ -32,6 +36,9 @@ export default function testPage() {
     const systemStateColor = useSharedValue(0);
     const secondaryButtonSelection = useSharedValue(0);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const user = useContext(UserContext);
+    const [isEmergency, setIsEmergency] = useState(false);
+    const [location, setLocation] = useState<Location.LocationObject | null>(null);
 
     function secondaryButtonOnStart(axis: "x" | "y", distance: number, chosen: number) {
         return useAnimatedStyle(() => ({
@@ -45,8 +52,91 @@ export default function testPage() {
         }));
     }
 
+    async function requestPermissions() {
+        const { status } = await Notifications.requestPermissionsAsync();
+        if (status !== 'granted') {
+            alert('Permission not granted for notifications');
+        }
+    }
 
-    
+    async function sendNotification() {
+        await Notifications.scheduleNotificationAsync({
+            content: {
+                title: "🚨 Emergency Alert!",
+                body: "This is a test notification",
+                data: { info: "extra data here" },
+            },
+            trigger: null, 
+        });
+    }
+
+    useEffect(() => {
+        requestPermissions();
+    }, []);
+
+    const API_BASE = "https://magnolia-wearier-unsuccessfully.ngrok-free.dev"; // or your ngrok URL if deployed
+
+
+    const fetchLocation = async () => {
+        try {
+            let { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                alert('Permission to access location was denied');
+                return;
+            }
+
+            let locationData = await Location.getCurrentPositionAsync({});
+            setLocation(locationData);
+        } catch (error) {
+            alert('Error fetching location');
+        }
+    };
+    type FirstAidPayload = {
+        latitude: number;
+        longitude: number;
+    };
+
+    useEffect(() => {
+        fetchLocation();
+        const id = setInterval(() => {
+            fetchLocation();
+        }, 60000);
+
+        return () => clearInterval(id);
+    }, []);
+
+
+
+
+
+    async function sendFirstAidReport(payload: FirstAidPayload): Promise<void> {
+        try {
+            const response = await fetch(`${API_BASE}/first-aid/report`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+            });
+
+            console.log("HTTP status:", response.status);
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.error || `HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log("✅ Report sent:", data);
+        } catch (err) {
+            console.error("❌ Failed to send report:", err);
+        }
+    }
+
+
+
+
+
 
     function clearSystemText(newText?: string, newTextColor?: string) {
         if (mainSystemTextInterval.current) clearInterval(mainSystemTextInterval.current);
@@ -133,11 +223,11 @@ export default function testPage() {
         }
     }
 
-    function onButton1Press() {
+    function onAPIPress() {
         if (secondaryButtonSelection.value == 0) {
             secondaryButtonSelection.value = 1;
             offset.value = 0;
-            clearSystemText("Section_1 opened", "black");
+            clearSystemText("API opened", "#15efffff");
         } else {
             secondaryButtonSelection.value = 0;
             turnOnSystem();
@@ -147,7 +237,7 @@ export default function testPage() {
         if (secondaryButtonSelection.value == 0) {
             secondaryButtonSelection.value = 3;
             offset.value = 0;
-            clearSystemText("Section_3 Opened", "black");
+            clearSystemText("What to do?", "red");
         } else {
             secondaryButtonSelection.value = 0;
             turnOnSystem();
@@ -157,7 +247,7 @@ export default function testPage() {
         if (secondaryButtonSelection.value == 0) {
             secondaryButtonSelection.value = 4;
             offset.value = 0;
-            clearSystemText("Section_4 Opened", "black");
+            clearSystemText("Rescue Map", "black");
         } else {
             secondaryButtonSelection.value = 0;
             turnOnSystem();
@@ -180,83 +270,128 @@ export default function testPage() {
             circleSize1 = 250;
             break;
         case 2:
-            backGroundColors = ['#0044ff', '#222324ff'];
+            backGroundColors = ['rgba(255, 252, 65, 1)', '#c57e13ff'];
+            circleColor = ['rgba(255, 252, 65, 1)', '#c57e13ff'];
+            circleSize1 = 300;
             break;
         default: // for erroring out
             backGroundColors = ['#000', '#000'];
             break;
     }
 
+    function onEmergencyPress() {
+        if (isEmergency) {
+            setIsEmergency(false);
+            shutOffSystem();
+        } else {
+            turnOnSystem();
+            sendFirstAidReport({ latitude: location.coords.latitude, longitude: location.coords.longitude });
+            offset.value = 0;
+            setIsEmergency(true);
+            systemStateColor.value = 2;
+            setEnableSecondaryButton(false);
+            setTimeout(() => {
+                setEnableSecondaryButton(true);
+            }, 250);
+            setEnableMainButton(false);
+            setTimeout(() => {
+                setEnableMainButton(true);
+            }, 750);
+            setSystemActive(true);
+            clearSystemText("Help called", 'rgba(255, 0, 0, 1)');
+        }
+
+
+    }
+
     return (
-        <ScrollView
-            bounces={false}          
-            overScrollMode="never"   
-            style={{ flex: 1 }}
-            contentContainerStyle={{ height: secondaryButtonSelection.value == 0 ? '100%' : '200%' }}
-            showsVerticalScrollIndicator={false}
-            scrollEventThrottle={100}
-            scrollEnabled={secondaryButtonSelection.value != 0}
-        >
-            <MainBackground
-                backgroundColors={backGroundColors}
-                circleColors={circleColor}
-                circleSize={circleSize1}
-                isExtended={secondaryButtonSelection.value != 0}
-            />
-            <View style={[styles.mainContainer, { height: secondaryButtonSelection.value == 0 ? '100%' : '50%' }]}>
 
-                <View style={styles.mainSystemTextContainer}>
-                    <Text style={{ ...styles.mainSystemText, color: systemTextColor }}> {systemText} </Text>
-                </View>
+        <UserContextProvider>
+            <SafeAreaProvider>
+                <SafeAreaView style={{ flex: 1, backgroundColor: '#000', paddingTop: 0, paddingBottom: 0 }}>
+                    <ScrollView
+                        bounces={false}
+                        overScrollMode="never"
+                        style={{ flex: 1 }}
+                        contentContainerStyle={{ height: secondaryButtonSelection.value == 0 ? '100%' : '200%' }}
+                        showsVerticalScrollIndicator={false}
+                        scrollEventThrottle={100}
+                        scrollEnabled={secondaryButtonSelection.value != 0}
+                    >
+                        <MainBackground
+                            backgroundColors={backGroundColors}
+                            circleColors={circleColor}
+                            circleSize={circleSize1}
+                            isExtended={secondaryButtonSelection.value != 0}
+                        />
+                        <View style={[styles.mainContainer, { height: secondaryButtonSelection.value == 0 ? '100%' : '50%' }]}>
 
-
-                <View style={styles.mainCenteredButtonContainer}>
-
-                    <Animated.View style={[{ justifyContent: 'center', alignItems: 'center', position: 'absolute', zIndex: 1 }, mainButtonOnStart()]}>
-                        <Pressable style={[styles.mainCenteredButton, { backgroundColor: systemActive ? 'white' : '#1e3470ff', }]} disabled={!enableMainButton || secondaryButtonSelection.value != 0} onPress={() => { systemActive ? shutOffSystem() : turnOnSystem(); }}>
-                            <IconSymbol size={56} name="power" color={systemActive ? "green" : "red"} />
-                        </Pressable>
-                    </Animated.View>
-                    <Animated.View
-                        style={[styles.secondaryCenteredButtonAnimation, secondaryButtonOnStart("x", 1, 1)]}>
-                        <Pressable disabled={!enableSecondaryButton || !isLoggedIn} style={[styles.secondaryCenterdButtons, {opacity: isLoggedIn? 1 : 0.5}]} onPress={() => onButton1Press()}>
-
-                        </Pressable>
-                    </Animated.View>
-                    <Animated.View style={[styles.secondaryCenteredButtonAnimation, secondaryButtonOnStart("y", 1, 2)]}>
-                        <Pressable disabled={!enableSecondaryButton} style={[styles.secondaryCenterdButtons]} onPress={() => { onSettingPress() }}>
-                            <View style={[{ justifyContent: 'center', alignItems: 'center' }]}>
-                                <IconSymbol size={48} name="gear" color="white" />
+                            <View style={styles.mainSystemTextContainer}>
+                                <Text style={{ ...styles.mainSystemText, color: systemTextColor }}> {systemText} </Text>
                             </View>
-                        </Pressable>
-                    </Animated.View>
-                    <Animated.View style={[styles.secondaryCenteredButtonAnimation, secondaryButtonOnStart("x", -1, 3)]}><Pressable disabled={!enableSecondaryButton} style={styles.secondaryCenterdButtons} onPress={() => onButton3Press()}></Pressable></Animated.View>
-                    <Animated.View style={[styles.secondaryCenteredButtonAnimation, secondaryButtonOnStart("y", -1, 4)]}><Pressable disabled={!enableSecondaryButton} style={styles.secondaryCenterdButtons} onPress={() => onButton4Press()}></Pressable></Animated.View>
 
-                </View >
-            </View>
-            <View style={[styles.settingContainer, { zIndex: secondaryButtonSelection.value == 1 ? 2 : -11 }]}>
-                <View>
-                    <Text>Section_1</Text>
-                </View>
-            </View>
-            <View style={[styles.settingContainer, { zIndex: secondaryButtonSelection.value == 2 ? 2 : -11 }]}>
-                   <Settings 
-                   isActive = {secondaryButtonSelection.value == 2}
-                   onLogin = {(val: boolean) => setIsLoggedIn(val)}
-                   /> 
-            </View>
-            <View style={[styles.settingContainer, { zIndex: secondaryButtonSelection.value == 3 ? 2 : -11 }]}>
-                <View>
-                    <Text>Section_3</Text>
-                </View>
-            </View>
-            <View style={[styles.settingContainer, { zIndex: secondaryButtonSelection.value == 4 ? 2 : -11 }]}>
-                <View>
-                    <Text>Section_4</Text>
-                </View>
-            </View>
-        </ScrollView>
+
+                            <View style={styles.mainCenteredButtonContainer}>
+
+                                <Animated.View style={[{ justifyContent: 'center', alignItems: 'center', position: 'absolute', zIndex: 1 }, mainButtonOnStart()]}>
+                                    <Pressable onLongPress={() => { onEmergencyPress() }} style={[styles.mainCenteredButton, { backgroundColor: systemActive ? 'white' : '#1e3470ff', }]} disabled={!enableMainButton || secondaryButtonSelection.value != 0} onPress={() => { systemActive ? shutOffSystem() : turnOnSystem(); }}>
+                                        <IconSymbol size={56} name="power" color={systemActive ? "green" : "red"} />
+                                    </Pressable>
+                                </Animated.View>
+                                <Animated.View
+                                    style={[styles.secondaryCenteredButtonAnimation, secondaryButtonOnStart("x", 1, 1)]}>
+                                    <Pressable disabled={!enableSecondaryButton || !isLoggedIn} style={[styles.secondaryCenterdButtons, { opacity: isLoggedIn ? 1 : 0.5 }]} onPress={() => onAPIPress()}>
+                                        <View style={[{ justifyContent: 'center', alignItems: 'center' }]}>
+                                            <IconSymbol size={48} name="wrench" color="white" />
+                                        </View>
+                                    </Pressable>
+                                </Animated.View>
+                                <Animated.View style={[styles.secondaryCenteredButtonAnimation, secondaryButtonOnStart("y", 1, 2)]}>
+                                    <Pressable disabled={!enableSecondaryButton} style={[styles.secondaryCenterdButtons]} onPress={() => { onSettingPress() }}>
+                                        <View style={[{ justifyContent: 'center', alignItems: 'center' }]}>
+                                            <IconSymbol size={48} name="gear" color="white" />
+                                        </View>
+                                    </Pressable>
+                                </Animated.View>
+                                <Animated.View style={[styles.secondaryCenteredButtonAnimation, secondaryButtonOnStart("x", -1, 3)]}>
+                                    <Pressable disabled={!enableSecondaryButton} style={styles.secondaryCenterdButtons} onPress={() => onButton3Press()}>
+                                        <View style={[{ justifyContent: 'center', alignItems: 'center' }]}>
+                                            <IconSymbol size={48} name="car" color="white" />
+                                        </View>
+                                    </Pressable>
+                                </Animated.View>
+                                <Animated.View style={[styles.secondaryCenteredButtonAnimation, secondaryButtonOnStart("y", -1, 4)]}>
+                                    <Pressable disabled={!enableSecondaryButton || !isLoggedIn} style={[styles.secondaryCenterdButtons, { opacity: isLoggedIn ? 1 : 0.5 }]} onPress={() => onButton4Press()}>
+                                        <View style={[{ justifyContent: 'center', alignItems: 'center' }]}>
+                                            <Entypo size={48} name="arrow-bold-up" color="white" />
+                                        </View>
+                                    </Pressable>
+                                </Animated.View>
+                            </View >
+                        </View>
+                        <View style={[styles.settingContainer, { zIndex: secondaryButtonSelection.value == 1 ? 2 : -11 }]}>
+                            <API />
+                        </View>
+                        <View style={[styles.settingContainer, { zIndex: secondaryButtonSelection.value == 2 ? 2 : -11 }]}>
+                            <Settings
+                                isActive={secondaryButtonSelection.value == 2}
+                                onLogin={(val: boolean) => setIsLoggedIn(val)}
+                            />
+                        </View>
+                        <View style={[styles.settingContainer, { zIndex: secondaryButtonSelection.value == 3 ? 2 : -11 }]}>
+                            <View>
+                                <Info />
+                            </View>
+                        </View>
+                        <View style={[styles.settingContainer, { zIndex: secondaryButtonSelection.value == 4 ? 2 : -11 }]}>
+                            <View>
+                                <Map />
+                            </View>
+                        </View>
+                    </ScrollView>
+                </SafeAreaView>
+            </SafeAreaProvider>
+        </UserContextProvider>
     );
 }
 
